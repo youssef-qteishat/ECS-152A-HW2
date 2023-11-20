@@ -51,7 +51,6 @@ def send_DNS_payload(payload, server, port=53, use_tcp=False, timeout=10):
             sock.sendto(payload, (server, port))
             response, _ = sock.recvfrom(512)
             return response
-
 def unpack_dns_response(response, query):
     # Unpack the header
     header = response[:12]
@@ -63,10 +62,9 @@ def unpack_dns_response(response, query):
     for _ in range(ancount):
         _, current_pos = unpack_name(response, current_pos)
         current_pos += 10
-
-    # Process the authoritative record
-    type_ns = []
+    #process the authoritative record
     type_a = []
+    type_ns = []
     for _ in range(nscount):
         name, current_pos = unpack_name(response, current_pos)
         type_, class_, ttl, data_length = struct.unpack_from('>HHIH', response, current_pos)
@@ -75,7 +73,7 @@ def unpack_dns_response(response, query):
         if type_ == 2 and class_ == 1:  # Type NS, Class IN
             ns_domain_name, _ = unpack_name(response, current_pos)
             print(f"Authority Record - {name.decode('utf-8')}: NS Record = {ns_domain_name.decode('utf-8')}")
-            print("data length:", data_length)
+            print("data length: ",data_length)
 
     # Process the Additional section
     for _ in range(arcount):
@@ -85,18 +83,16 @@ def unpack_dns_response(response, query):
 
         if type_ == 1 and class_ == 1:  # Type A, Class IN
             ip_address = struct.unpack('!BBBB', response[current_pos:current_pos + 4])
-            print(f"Additional Record - {name.decode('utf-8')}: IP Address = {'.'.join(map(str, ip_address))}")
             type_a.append('.'.join(map(str, ip_address)))
-        elif type_ == 2 and class_ == 1:  # Type NS, Class IN
-            ns_domain_name, _ = unpack_name(response, current_pos)
-            print(f"Additional Record - {name.decode('utf-8')}: NS Record = {ns_domain_name.decode('utf-8')}")
-            type_ns.append(ns_domain_name.decode('utf-8'))
+            print(f"Additional Record - {name.decode('utf-8')}: IP Address = {'.'.join(map(str, ip_address))}")
+        # elif type_ == 2 and class_ == 1:  # Type NS, Class IN
+        #     ns_domain_name, _ = unpack_name(response, current_pos)
+        #     type_ns.append(ns_domain_name.decode('utf-8'))
+        #     print(f"Additional Record - {name.decode('utf-8')}: NS Record = {ns_domain_name.decode('utf-8')}")
+            
         current_pos += data_length
-
-    if len(type_ns) == 0:
-        return type_a[:-1]
-    else:
-        return type_ns[:-1]
+    print(type_a)
+    return type_a[-1]
 
 def unpack_name(response, pos):
     name_parts = []
