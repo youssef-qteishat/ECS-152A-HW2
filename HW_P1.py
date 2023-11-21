@@ -1,7 +1,7 @@
 import socket
 import struct
 import time
-import requests
+# import requests
 
 def create_DNS_Payload(domain):
     # Can be a random number
@@ -15,7 +15,8 @@ def create_DNS_Payload(domain):
     ans_count = 0
     auth_count = 0
     add_count = 0
-    header = struct.pack('>HHHHHH', transaction_id, flags, question_count, ans_count, auth_count, add_count)
+    header = struct.pack('>HHHHHH', transaction_id, flags, question_count, 
+ans_count, auth_count, add_count)
 
     query = b''
     for part in domain.split('.'):
@@ -51,6 +52,7 @@ def send_DNS_payload(payload, server, port=53, use_tcp=False, timeout=10):
             sock.sendto(payload, (server, port))
             response, _ = sock.recvfrom(512)
             return response
+
 def unpack_dns_response(response, query):
     # Unpack the header
     header = response[:12]
@@ -63,8 +65,7 @@ def unpack_dns_response(response, query):
         _, current_pos = unpack_name(response, current_pos)
         current_pos += 10
     #process the authoritative record
-    type_a = []
-    type_ns = []
+    ns_servers = []
     for _ in range(nscount):
         name, current_pos = unpack_name(response, current_pos)
         type_, class_, ttl, data_length = struct.unpack_from('>HHIH', response, current_pos)
@@ -72,8 +73,8 @@ def unpack_dns_response(response, query):
 
         if type_ == 2 and class_ == 1:  # Type NS, Class IN
             ns_domain_name, _ = unpack_name(response, current_pos)
+            ns_servers.append(ns_domain_name.decode('utf-8'))
             print(f"Authority Record - {name.decode('utf-8')}: NS Record = {ns_domain_name.decode('utf-8')}")
-            print("data length: ",data_length)
 
     # Process the Additional section
     for _ in range(arcount):
@@ -83,16 +84,10 @@ def unpack_dns_response(response, query):
 
         if type_ == 1 and class_ == 1:  # Type A, Class IN
             ip_address = struct.unpack('!BBBB', response[current_pos:current_pos + 4])
-            type_a.append('.'.join(map(str, ip_address)))
             print(f"Additional Record - {name.decode('utf-8')}: IP Address = {'.'.join(map(str, ip_address))}")
-        # elif type_ == 2 and class_ == 1:  # Type NS, Class IN
-        #     ns_domain_name, _ = unpack_name(response, current_pos)
-        #     type_ns.append(ns_domain_name.decode('utf-8'))
-        #     print(f"Additional Record - {name.decode('utf-8')}: NS Record = {ns_domain_name.decode('utf-8')}")
-            
         current_pos += data_length
-    print(type_a)
-    return type_a[-1]
+    print(ns_servers)
+    return ns_servers[0]
 
 def unpack_name(response, pos):
     name_parts = []
@@ -183,36 +178,11 @@ if __name__ == "__main__":
                    "193.0.14.129", 
                    "199.7.83.42", 
                    "202.12.27.33"]
-    # request to root server
+    # measure_DNS_RTT("tmz.com")
     payload, query = create_DNS_Payload("tmz.com")
     start_time_dns = time.time()
     dns_response = send_DNS_payload(payload, "202.12.27.33", 53, False)
-    tld_server = unpack_dns_response(dns_response, query)
+    tld_server_domain = unpack_dns_response(dns_response, query)
     end_time_dns = time.time()
     rtt_dns = end_time_dns - start_time_dns
-    print("tld server: ",tld_server)
     print("DNS request to root server: ",rtt_dns)
-
-    #request to TLD server
-    payload, query = create_DNS_Payload("tmz.com")
-    start_time = time.time()
-    dns_response = send_DNS_payload(payload, tld_server, 53, False)
-    auth_server = unpack_dns_response(dns_response, query)
-    print(auth_server)
-    end_time = time.time()
-    rtt_tld = end_time - start_time
-    print("auth server: ",auth_server)
-    print("Request to TLD server: ",rtt_tld)
-
-    # Use a specific IP address for HTTP request
-    # target_ip = "192.41.162.30"
-
-    # Measure RTT for HTTP request
-    # url = "https://www.tmz.com/"  # Replace with your desired URL
-    # rtt_http, http_response = measure_RTT_with_socket(url, target_ip)
-
-    # print("HTTP request RTT: ", rtt_http)
-    # print("HTTP Response:\n", http_response)
-
-
-
